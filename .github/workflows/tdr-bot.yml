@@ -11,7 +11,7 @@ on:
       runner:
         description: "無料の標準実行環境（接続比較用）"
         type: choice
-        default: macos-latest
+        default: ubuntu-latest
         required: true
         options: [macos-latest, ubuntu-latest, windows-latest]
   schedule:
@@ -24,7 +24,7 @@ concurrency:
 jobs:
   forecast:
     if: github.event_name == 'workflow_dispatch' || vars.CLOUD_ENABLED == 'true'
-    runs-on: ${{ inputs.runner || 'macos-latest' }}
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     timeout-minutes: 10
     defaults:
       run:
@@ -33,6 +33,7 @@ jobs:
     env:
       CLOUD_OPERATION: ${{ github.event_name == 'schedule' && 'run' || inputs.operation }}
       CLOUD_MODE: "true"
+      BROWSER_SCHEDULE_FILE: browser-schedules.json
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       DATABASE_SCHEMA: tdr_bot
       SCHEDULE_TERMS_REVIEWED: "true"
@@ -55,6 +56,12 @@ jobs:
         run: python -m zipfile -e tdr-bot-source.zip bundle
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
+      - name: Install browser
+        if: env.CLOUD_OPERATION == 'diagnose' || env.CLOUD_OPERATION == 'run'
+        run: python -m playwright install --with-deps chromium
+      - name: Read rendered official schedules
+        if: env.CLOUD_OPERATION == 'diagnose' || env.CLOUD_OPERATION == 'run'
+        run: python -m tdrbot.browser_schedule
       - name: Run selected operation
         run: |
           if [ "$CLOUD_OPERATION" = "test" ]; then
