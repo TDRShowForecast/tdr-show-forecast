@@ -8,6 +8,12 @@ on:
         default: diagnose
         required: true
         options: [diagnose, test, run, pause, resume, status]
+      runner:
+        description: "無料の標準実行環境（接続比較用）"
+        type: choice
+        default: macos-latest
+        required: true
+        options: [macos-latest, ubuntu-latest, windows-latest]
   schedule:
     - cron: "3,13,23,33,43,53 22-23,0-12 * * *"
 permissions:
@@ -18,10 +24,11 @@ concurrency:
 jobs:
   forecast:
     if: github.event_name == 'workflow_dispatch' || vars.CLOUD_ENABLED == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'macos-latest' }}
     timeout-minutes: 10
     defaults:
       run:
+        shell: bash
         working-directory: bundle/tdr-bot
     env:
       CLOUD_OPERATION: ${{ github.event_name == 'schedule' && 'run' || inputs.operation }}
@@ -40,11 +47,9 @@ jobs:
       ADMIN_WEBHOOK: ${{ secrets.ADMIN_WEBHOOK }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+        with: {python-version: "3.12"}
       - name: Unpack source
         working-directory: .
         run: python -m zipfile -e tdr-bot-source.zip bundle
