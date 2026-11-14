@@ -1,71 +1,22 @@
-name: TDR Forecast Bot
+name: TDR source checks
 on:
   workflow_dispatch:
-    inputs:
-      operation:
-        description: "diagnose=通信試験 / test=テスト / run=予測 / pause=停止 / resume=再開 / status=状態"
-        type: choice
-        default: diagnose
-        required: true
-        options: [diagnose, test, run, pause, resume, status]
-      runner:
-        description: "無料の標準実行環境（接続比較用）"
-        type: choice
-        default: ubuntu-latest
-        required: true
-        options: [macos-latest, ubuntu-latest, windows-latest]
-  schedule:
-    - cron: "3,13,23,33,43,53 22-23,0-12 * * *"
 permissions:
   contents: read
-concurrency:
-  group: tdr-forecast-worker
-  cancel-in-progress: false
 jobs:
-  forecast:
-    if: github.event_name == 'workflow_dispatch' || vars.CLOUD_ENABLED == 'true'
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+  tests:
+    runs-on: ubuntu-latest
     timeout-minutes: 10
-    defaults:
-      run:
-        shell: bash
-        working-directory: bundle/tdr-bot
-    env:
-      CLOUD_OPERATION: ${{ github.event_name == 'schedule' && 'run' || inputs.operation }}
-      CLOUD_MODE: "true"
-      BROWSER_SCHEDULE_FILE: browser-schedules.json
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DATABASE_SCHEMA: tdr_bot
-      SCHEDULE_TERMS_REVIEWED: "true"
-      LIVE_POSTING: ${{ vars.LIVE_POSTING || 'false' }}
-      INITIAL_POST_APPROVED: ${{ vars.INITIAL_POST_APPROVED || 'false' }}
-      MAX_POSTS_PER_DAY: "20"
-      MAX_POSTS_PER_15_MIN: "10"
-      X_API_KEY: ${{ secrets.X_API_KEY }}
-      X_API_SECRET: ${{ secrets.X_API_SECRET }}
-      X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-      X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
-      ADMIN_WEBHOOK: ${{ secrets.ADMIN_WEBHOOK }}
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - name: Unpack source
-        working-directory: .
         run: python -m zipfile -e tdr-bot-source.zip bundle
       - name: Install dependencies
+        working-directory: bundle/tdr-bot
         run: python -m pip install -r requirements.txt
-      - name: Install browser
-        if: env.CLOUD_OPERATION == 'diagnose' || env.CLOUD_OPERATION == 'run'
-        run: python -m playwright install --with-deps chromium
-      - name: Read rendered official schedules
-        if: env.CLOUD_OPERATION == 'diagnose' || env.CLOUD_OPERATION == 'run'
-        run: python -m tdrbot.browser_schedule
-      - name: Run selected operation
-        run: |
-          if [ "$CLOUD_OPERATION" = "test" ]; then
-            python -m pytest -q
-          else
-            python -m tdrbot.cloud
-          fi
+      - name: Offline tests only
+        working-directory: bundle/tdr-bot
+        run: python -m pytest -q
